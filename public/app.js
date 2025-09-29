@@ -9,8 +9,16 @@ let outListener = null;
 // Driving mode state
 let directionsService = null;
 let directionsRenderer = null;
+let originAutocomplete = null;
+let destinationAutocomplete = null;
+let originMarker = null;
+let destinationMarker = null;
+let stopMarkers = [];
+let originLatLng = null;
+let destinationLatLng = null;
 let drivingModeEl = null;
-let drivingWaypoints = []; // array of LatLngLiteral from clicks
+let drivingWaypoints = []; // array of LatLngLiteral for manual add (click to add stops)
+let geocoder = null;
 
 function computePathLengthMeters(path) {
   if (!window.google || !window.google.maps || !google.maps.geometry) return 0;
@@ -18,14 +26,12 @@ function computePathLengthMeters(path) {
   return google.maps.geometry.spherical.computeLength(gPath);
 }
 
-function isDrivingMode() {
-  return !!(drivingModeEl && drivingModeEl.checked);
-}
+function isDrivingMode() { return true; }
 
 async function loadGoogleMaps(apiKey) {
   const existing = document.querySelector('script[data-google-maps]');
   if (existing) return;
-  const url = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry`;
+  const url = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry,places`;
   await new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = url;
@@ -45,26 +51,18 @@ async function getApiKey() {
 }
 
 function setButtonsState(state) {
-  const btnStart = document.getElementById('btn-start');
-  const btnFinish = document.getElementById('btn-finish');
   const btnClear = document.getElementById('btn-clear');
   const btnSubmit = document.getElementById('btn-submit');
+  if (!btnClear || !btnSubmit) return;
 
   if (state === 'idle') {
-    btnStart.disabled = false;
-    btnFinish.disabled = true;
     btnClear.disabled = true;
     btnSubmit.disabled = true;
   } else if (state === 'drawing') {
-    btnStart.disabled = true;
-    btnFinish.disabled = false;
     btnClear.disabled = false;
     btnSubmit.disabled = true;
   } else if (state === 'done') {
-    btnStart.disabled = false;
-    btnFinish.disabled = true;
     btnClear.disabled = false;
-    // We compute exact enabled state via refreshSubmitEnabled
     refreshSubmitEnabled();
     return;
   }
@@ -89,14 +87,12 @@ function getDrivingTotalMeters() {
 
 function refreshSubmitEnabled() {
   const btnSubmit = document.getElementById('btn-submit');
+  const btnClear = document.getElementById('btn-clear');
   if (!btnSubmit) return;
-  if (isDrivingMode()) {
-    const ok = !!directionsRenderer && getDrivingOverviewPath().length >= 2 && !drawing;
-    btnSubmit.disabled = !ok;
-  } else {
-    const ok = !!polyline && polyline.getPath && polyline.getPath().getLength() >= 2 && !drawing;
-    btnSubmit.disabled = !ok;
-  }
+  const hasRoute = !!directionsRenderer && getDrivingOverviewPath().length >= 2 && !drawing;
+  const ok = hasRoute;
+  btnSubmit.disabled = !ok;
+  if (btnClear) btnClear.disabled = !hasRoute;
 }
 
 function updateInfo() {
@@ -147,19 +143,28 @@ function clearDriving() {
     directionsRenderer = null;
   }
   drivingWaypoints = [];
+  // Clear stop markers
+  if (stopMarkers && stopMarkers.length) {
+    stopMarkers.forEach(m => m.setMap(null));
+    stopMarkers = [];
+  }
+  if (originMarker) { originMarker.setMap(null); originMarker = null; }
+  if (destinationMarker) { destinationMarker.setMap(null); destinationMarker = null; }
+  originLatLng = null;
+  destinationLatLng = null;
 }
 
 function clearRoute() {
-  if (isDrivingMode()) {
-    clearDriving();
-  }
-  if (polyline) {
-    polyline.setMap(null);
-    polyline = null;
-  }
+  clearDriving();
+  if (polyline) { polyline.setMap(null); polyline = null; }
   clearPreview();
   teardownListeners();
   drawing = false;
+  // Clear autocomplete input fields
+  const originInput = document.getElementById('origin');
+  const destinationInput = document.getElementById('destination');
+  if (originInput) originInput.value = '';
+  if (destinationInput) destinationInput.value = '';
   setButtonsState('idle');
   updateInfo();
 }
@@ -176,6 +181,24 @@ function ensureDirectionsObjects() {
     directionsRenderer.addListener('directions_changed', () => {
       if (!drawing) updateInfo();
     });
+  }
+}
+
+async function routeWithPlaces(originLL, destinationLL) {
+  ensureDirectionsObjects();
+  try {
+    const result = await directionsService.route({
+      origin: originLL,
+      destination: destinationLL,
+      travelMode: google.maps.TravelMode.DRIVING,
+      optimizeWaypoints: false,
+      provideRouteAlternatives: false
+    });
+    directionsRenderer.setDirections(result);
+    updateInfo();
+  } catch (e) {
+    console.error('Directions failed', e);
+    alert('Failed to fetch driving directions for the selected places.');
   }
 }
 
@@ -199,115 +222,16 @@ async function routeDriving() {
     });
     directionsRenderer.setDirections(result);
     updateInfo();
+    refreshSubmitEnabled();
   } catch (e) {
     console.error('Directions failed', e);
     refreshSubmitEnabled();
   }
 }
 
-function beginDrawing() {
-  if (!map) return;
-  drawing = true;
-  setButtonsState('drawing');
+function beginDrawing() { /* removed in driving-only workflow */ }
 
-  if (isDrivingMode()) {
-    clearRoute(); // ensure clean start, but keep mode
-    drawing = true;
-    setButtonsState('drawing');
-    ensureDirectionsObjects();
-    drivingWaypoints = [];
-
-    clickListener = map.addListener('click', (e) => {
-      const ll = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-      drivingWaypoints.push(ll);
-      routeDriving();
-    });
-
-    // No preview line in driving mode
-    return;
-  }
-
-  // Freehand mode
-  if (!polyline) {
-    polyline = new google.maps.Polyline({
-      map,
-      path: [],
-      strokeColor: '#2563eb',
-      strokeWeight: 4,
-      clickable: false,
-      editable: false
-    });
-  } else {
-    polyline.setPath([]);
-    polyline.setEditable(false);
-  }
-
-  clearPreview();
-
-  // Create preview line (dashed) to show tentative segment to cursor
-  previewLine = new google.maps.Polyline({
-    map,
-    path: [],
-    strokeColor: '#2563eb',
-    strokeOpacity: 0.6,
-    strokeWeight: 3,
-    clickable: false,
-    icons: [{
-      icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
-      offset: '0',
-      repeat: '12px'
-    }]
-  });
-
-  // Add points on click
-  clickListener = map.addListener('click', (e) => {
-    const ll = e.latLng;
-    polyline.getPath().push(ll);
-    updateInfo();
-  });
-
-  // Live preview from last fixed vertex to cursor
-  moveListener = map.addListener('mousemove', (e) => {
-    const path = polyline.getPath();
-    if (path.getLength() === 0) {
-      previewLine.setPath([]);
-      return;
-    }
-    const last = path.getAt(path.getLength() - 1);
-    previewLine.setPath([last, e.latLng]);
-  });
-
-  // Clear preview when cursor leaves map container
-  outListener = map.addListener('mouseout', () => {
-    previewLine.setPath([]);
-  });
-}
-
-function finishDrawing() {
-  drawing = false;
-  teardownListeners();
-  clearPreview();
-
-  if (isDrivingMode()) {
-    ensureDirectionsObjects();
-    setButtonsState('done');
-    updateInfo();
-    refreshSubmitEnabled();
-    return;
-  }
-
-  if (polyline) {
-    polyline.setEditable(true);
-    polyline.addListener('mouseup', () => { updateInfo(); });
-    polyline.addListener('insert_at', updateInfoFromPathEvent);
-    polyline.addListener('remove_at', updateInfoFromPathEvent);
-    polyline.addListener('set_at', updateInfoFromPathEvent);
-  }
-
-  setButtonsState('done');
-  updateInfo();
-  refreshSubmitEnabled();
-}
+function finishDrawing() { /* removed in driving-only workflow */ }
 
 function updateInfoFromPathEvent() {
   // For MVCArray change events where "this" is the polyline's path
@@ -370,14 +294,75 @@ async function init() {
       zoom: 12,
       mapId: 'DEMO_MAP_ID'
     });
+    geocoder = new google.maps.Geocoder();
 
-    drivingModeEl = document.getElementById('mode-driving');
+    // Places Autocomplete for origin/destination
+    const originInput = document.getElementById('origin');
+    const destinationInput = document.getElementById('destination');
+    if (originInput && destinationInput && google.maps.places) {
+      originAutocomplete = new google.maps.places.Autocomplete(originInput, { fields: ['geometry', 'name'] });
+      destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, { fields: ['geometry', 'name'] });
+
+      // Center the map when a place is chosen
+      function centerOnPlace(place) {
+        if (!place || !place.geometry) return;
+        if (place.geometry.viewport) {
+          map.fitBounds(place.geometry.viewport);
+        } else if (place.geometry.location) {
+          map.setCenter(place.geometry.location);
+          map.setZoom(14);
+        }
+      }
+
+      originAutocomplete.addListener('place_changed', () => {
+        const p = originAutocomplete.getPlace();
+        centerOnPlace(p);
+        if (originMarker) { originMarker.setMap(null); }
+        if (p && p.geometry && p.geometry.location) {
+          originMarker = new google.maps.Marker({ position: p.geometry.location, map, label: 'A' });
+          originLatLng = { lat: p.geometry.location.lat(), lng: p.geometry.location.lng() };
+        }
+        // If destination already chosen, auto route with current stops
+        if (originLatLng && destinationLatLng) {
+          drivingWaypoints = [originLatLng, ...drivingWaypoints.filter(() => true), destinationLatLng];
+          routeDriving();
+        }
+      });
+
+      destinationAutocomplete.addListener('place_changed', () => {
+        const p = destinationAutocomplete.getPlace();
+        centerOnPlace(p);
+        if (destinationMarker) { destinationMarker.setMap(null); }
+        if (p && p.geometry && p.geometry.location) {
+          destinationMarker = new google.maps.Marker({ position: p.geometry.location, map, label: 'B' });
+          destinationLatLng = { lat: p.geometry.location.lat(), lng: p.geometry.location.lng() };
+        }
+        if (originLatLng && destinationLatLng) {
+          drivingWaypoints = [originLatLng, ...drivingWaypoints.filter(() => true), destinationLatLng];
+          routeDriving();
+        }
+      });
+
+      document.getElementById('btn-route')?.addEventListener('click', async () => {
+        const oPlace = originAutocomplete.getPlace();
+        const dPlace = destinationAutocomplete.getPlace();
+        const origin = oPlace && oPlace.geometry ? oPlace.geometry.location : null;
+        const destination = dPlace && dPlace.geometry ? dPlace.geometry.location : null;
+        if (!origin || !destination) {
+          alert('Please choose both origin and destination from the suggestions.');
+          return;
+        }
+        drivingModeEl = document.getElementById('mode-driving');
+        if (drivingModeEl) drivingModeEl.checked = true;
+        await routeWithPlaces({ lat: origin.lat(), lng: origin.lng() }, { lat: destination.lat(), lng: destination.lng() });
+      });
+    }
+
+    drivingModeEl = { checked: true };
 
     setButtonsState('idle');
     updateInfo();
 
-    document.getElementById('btn-start').addEventListener('click', beginDrawing);
-    document.getElementById('btn-finish').addEventListener('click', finishDrawing);
     document.getElementById('btn-clear').addEventListener('click', clearRoute);
     document.getElementById('btn-submit').addEventListener('click', submitRoute);
 
@@ -386,12 +371,51 @@ async function init() {
     });
     observer.observe(document.getElementById('point-count'), { childList: true });
 
-    if (drivingModeEl) {
-      drivingModeEl.addEventListener('change', () => {
-        clearRoute();
-        refreshSubmitEnabled();
-      });
+  // In driving-only mode, clicking on the map adds a stop and re-routes
+    map.addListener('click', async (e) => {
+      const ll = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+    // If origin not set, set as origin
+    if (!originLatLng) {
+      originLatLng = ll;
+      if (originMarker) originMarker.setMap(null);
+      originMarker = new google.maps.Marker({ position: ll, map, label: 'A' });
+      // Populate origin input via reverse geocoding
+      try {
+        if (geocoder) {
+          const res = await geocoder.geocode({ location: ll });
+          const addr = res.results && res.results[0] ? res.results[0].formatted_address : '';
+          const originInput = document.getElementById('origin');
+          if (originInput && addr) originInput.value = addr;
+        }
+      } catch {}
+      return;
     }
+    // If destination not set, set as destination and route
+    if (!destinationLatLng) {
+      destinationLatLng = ll;
+      if (destinationMarker) destinationMarker.setMap(null);
+      destinationMarker = new google.maps.Marker({ position: ll, map, label: 'B' });
+      // Populate destination input via reverse geocoding
+      try {
+        if (geocoder) {
+          const res = await geocoder.geocode({ location: ll });
+          const addr = res.results && res.results[0] ? res.results[0].formatted_address : '';
+          const destinationInput = document.getElementById('destination');
+          if (destinationInput && addr) destinationInput.value = addr;
+        }
+      } catch {}
+      drivingWaypoints = [originLatLng, destinationLatLng];
+      await routeDriving();
+      return;
+    }
+    // Otherwise, add as an intermediate stop before destination
+    const stopMarker = new google.maps.Marker({ position: ll, map });
+    stopMarkers.push(stopMarker);
+    // Rebuild waypoints = origin + existing stops + new stop + destination
+    const stops = stopMarkers.map(m => ({ lat: m.getPosition().lat(), lng: m.getPosition().lng() }));
+    drivingWaypoints = [originLatLng, ...stops, destinationLatLng];
+    await routeDriving();
+    });
 
   } catch (e) {
     console.error(e);

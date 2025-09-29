@@ -1,76 +1,110 @@
 ## Google Map Route Survey
 
-A simple Node/Express web app that serves a client with Google Maps where respondents can draw, drag-adjust, and submit a route as their survey answer. Submissions are stored as JSON on the server.
+An Express + Google Maps app for collecting realistic driving routes. Participants select Origin and Destination (via autocomplete or by clicking the map). A draggable route is drawn automatically; clicking the map adds intermediate stops between Origin and Destination. Submissions are stored in Postgres via Prisma.
+
+### Features
+- Origin/Destination with Google Places Autocomplete; A/B markers placed automatically
+- Auto-route on Destination selection; route is draggable and re-routes realistically
+- Click on the map to insert intermediate stops between A and B (stop markers shown)
+- Reverse geocoding fills inputs when users click the map instead of using autocomplete
+- Clear resets route, markers, and inputs; Submit persists the response
+- Security hardening: Helmet CSP for Google domains, rate limiting, small JSON body limit
+
+### Stack
+- Node.js, Express
+- Prisma + Postgres
+- Google Maps JavaScript API (Maps, Places, Directions, Geometry, Geocoding)
 
 ### Prerequisites
 - Node.js 18+
-- A Google Maps JavaScript API key (enable: Maps JavaScript API; Geometry library is loaded in JS)
-- Billing must be enabled for Directions-based routing
+- Google Cloud API key with:
+  - Maps JavaScript API enabled
+  - Places API enabled
+  - Billing enabled
+- Restrict the key by HTTP referrers (recommended):
+  - `http://localhost:4000/*` (local)
+  - `https://your-service.onrender.com/*` (Render)
+  - Any custom domains you’ll use
 
-### Setup
-1. Clone the repo and install dependencies:
-   ```bash
-   npm install
-   ```
-2. Create a `.env` file (or copy `.env.example`) and set your key:
-   ```bash
-   cp .env.example .env
-   # then edit .env
-   GOOGLE_MAPS_API_KEY=YOUR_API_KEY
-   PORT=3000
-   ```
-
-### Run locally
+### Environment
+Create `.env` (or copy `.env.example`):
 ```bash
+cp .env.example .env
+```
+Required variables:
+```ini
+GOOGLE_MAPS_API_KEY=your_key
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DB?sslmode=require
+PORT=3000                  # Render sets PORT automatically; use 4000 locally if you prefer
+IP_HASH_SALT=change_me     # optional; hashes client IPs if set
+```
+
+### Install & Run Locally
+```bash
+npm install
+npx prisma generate
+npx prisma db push   # creates the Submission table if missing
+
+export PORT=4000
+export GOOGLE_MAPS_API_KEY=your_key
+export DATABASE_URL=postgresql://...
 npm run dev
 ```
-Open `http://localhost:3000`.
+Open `http://localhost:4000`.
 
-### How to use
-There are two modes:
+### User Workflow
+1) Type and select Origin, then Destination. The route appears.
+2) Click on the map to add stops; drag the route to refine.
+3) Clear resets everything; Submit saves the route.
 
-- Freehand mode (default)
-  - Click "Start Drawing" and click on the map to add route points. A dashed preview shows the next segment to your cursor.
-  - Click "Finish Drawing" to stop adding points.
-  - Drag any vertex to adjust the route.
+### API
+- `GET /config` → `{ googleMapsApiKey }`
+- `POST /api/submit`
+  - Body:
+    ```json
+    {
+      "route": [{ "lat": 0, "lng": 0 }, ...],
+      "metadata": { "title": "...", "description": "...", "center": {"lat":0, "lng":0}, "zoom": 12, "mode": "driving" }
+    }
+    ```
+  - Response: `{ ok: true, id: "..." }`
 
-- Driving mode (snap to road)
-  - Toggle "Driving mode (snap to road)" in the controls.
-  - Click on the map to set start and end (and optional waypoints). The route is generated using Google Directions and snaps to real roads.
-  - Drag the route directly to adjust; it will re-route realistically.
+### Data Model
+`prisma/schema.prisma`
+```prisma
+model Submission {
+  id          String   @id @default(cuid())
+  submittedAt DateTime @default(now())
+  route       Json
+  metadata    Json
+  ipHash      String?
+  userAgent   String?
+}
+```
 
-Click "Submit Route" to save your answer.
-
-### Data storage
-- Submissions are saved to `data/submissions.json` with a unique id and timestamp.
-- Each submission includes:
-  - `route`: an array of `{ lat, lng }` points
-    - In Freehand mode: the polyline you drew
-    - In Driving mode: the Directions overview path decoded into coordinates (snap-to-road)
-  - `metadata`: `{ title, description, center, zoom, mode }`
-    - `mode` is `"freehand"` or `"driving"`
-
-### Deploy (Render + Postgres)
-1. Provision a Render PostgreSQL database. Copy the `External Connection` string as `DATABASE_URL` (ensure `sslmode=require`).
-2. Create a Render Web Service from this repo.
+### Deploy on Render (Web Service + Postgres)s
+1. Create a Render Postgres instance → copy External Connection string to `DATABASE_URL` (ensure `sslmode=require`).
+2. Create a Web Service from this repo.
 3. Environment Variables:
-   - `GOOGLE_MAPS_API_KEY=...` (restrict to your domain in GCP)
-   - `DATABASE_URL=...` (from step 1)
-   - `IP_HASH_SALT=...` (optional, to hash IPs)
+   - `GOOGLE_MAPS_API_KEY`
+   - `DATABASE_URL`
+   - `IP_HASH_SALT` (optional)
 4. Build & Start:
    - Build Command: `npm run render-build`
    - Start Command: `npm start`
-5. First deploy will run `prisma db push` to create the `Submission` table. Subsequent schema changes can be applied the same way or via `prisma migrate`.
+5. Ensure your key referrers include the Render subdomain and any custom domains.
 
-### Notes / Troubleshooting
-- If the map loads but routing fails, check API key billing and that the Maps JavaScript API is enabled.
-- If Driving mode is off, length is computed using the Geometry library on your drawn polyline; in Driving mode, length is summed from route legs returned by Directions.
-- Address already in use on port 3000 (EADDRINUSE): stop the previous server or kill it and retry:
-  ```bash
-  lsof -ti:3000 | xargs -r kill -9
-  npm run dev
-  ```
-- Failed to save submission: the server now recreates `data/submissions.json` automatically if missing or corrupt. If you still see an error, ensure the process has write permission to the `data/` folder or create it manually:
-  ```bash
-  mkdir -p data
-  ```
+### Security Notes
+- Helmet sets a CSP allowing `maps.googleapis.com` and `maps.gstatic.com` for scripts/images/styles/connect. Adjust in `server.js` if you embed other origins.
+- express-rate-limit is enabled; `app.set('trust proxy', 1)` supports proxy headers on Render.
+- When `IP_HASH_SALT` is set, the server hashes client IPs before storage; otherwise IP is not persisted.
+
+### Troubleshooting
+- Map not loading: check `/config` returns a non-empty key, enable Maps + Places APIs, ensure billing, verify referrer patterns.
+- Console shows `refererNotAllowedMapError`: add your exact domain pattern in Google Cloud.
+- Console shows `ApiNotActivatedMapError`: enable Maps JavaScript API.
+- Console shows `BillingNotEnabledMapError`: enable billing.
+- CSP errors: broaden CSP directives in `server.js` for required origins.
+- DB writes missing: verify `DATABASE_URL`, check Render logs, run `npx prisma db push`.
+- Port in use locally: `lsof -ti:4000 | xargs -r kill -9` then `npm run dev`.
+
