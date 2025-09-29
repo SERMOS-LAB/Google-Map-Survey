@@ -1,0 +1,24 @@
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #0f172a; background: #f8fafc; }
+.container { display: flex; min-height: 100%; flex-direction: column; }
+header { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: white; }
+header h1 { margin: 0 0 4px; font-size: 20px; }
+header p { margin: 0; color: #475569; }
+main { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 12px 20px; }
+.controls { display: flex; flex-direction: column; gap: 8px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+.controls .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.controls .row.right { justify-content: flex-end; }
+#map { height: calc(100vh - 260px); min-height: 400px; width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; background: #e2e8f0; }
+.info { display: flex; gap: 16px; color: #334155; }
+footer { padding: 12px 20px; color: #64748b; }
+
+button { border: 1px solid #cbd5e1; background: white; color: #0f172a; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+button.primary { background: #2563eb; border-color: #2563eb; color: white; }
+button.secondary { background: #475569; border-color: #475569; color: white; }
+button.success { background: #16a34a; border-color: #16a34a; color: white; }
+button.danger { background: #dc2626; border-color: #dc2626; color: white; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+label { display: flex; gap: 6px; align-items: center; }
+label span { color: #475569; font-size: 12px; }
+input[type="text"] { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; min-width: 240px; }

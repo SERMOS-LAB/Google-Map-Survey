@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Route Survey</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Route Survey</h1>
+      <p>Draw and edit your route, then submit it as your answer.</p>
+    </header>
+
+    <main>
+      <section class="controls">
+        <div class="row">
+          <button id="btn-start" class="primary">Start Drawing</button>
+          <button id="btn-finish" class="secondary" disabled>Finish Drawing</button>
+          <button id="btn-clear" class="danger" disabled>Clear</button>
+          <label style="margin-left:auto; gap:6px; display:flex; align-items:center;">
+            <input id="mode-driving" type="checkbox" />
+            <span>Driving mode (snap to road)</span>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Title (optional)</span>
+            <input id="title" type="text" placeholder="Morning commute, hiking path, etc." />
+          </label>
+          <label>
+            <span>Description (optional)</span>
+            <input id="description" type="text" placeholder="Any notes about this route" />
+          </label>
+        </div>
+        <div class="row right">
+          <button id="btn-submit" class="success" disabled>Submit Route</button>
+        </div>
+      </section>
+
+      <div id="map"></div>
+
+      <section class="info">
+        <div>
+          <strong>Points:</strong>
+          <span id="point-count">0</span>
+        </div>
+        <div>
+          <strong>Length:</strong>
+          <span id="route-length">0 m</span>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <small>Powered by Google Maps JavaScript API</small>
+    </footer>
+  </div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
