@@ -50,11 +50,17 @@ Click "Submit Route" to save your answer.
   - `metadata`: `{ title, description, center, zoom, mode }`
     - `mode` is `"freehand"` or `"driving"`
 
-### Deploy
-- Set environment variables in your hosting provider:
-  - `GOOGLE_MAPS_API_KEY`
-  - `PORT` (optional; provider may set it)
-- Run `node server.js` or use `npm start`.
+### Deploy (Render + Postgres)
+1. Provision a Render PostgreSQL database. Copy the `External Connection` string as `DATABASE_URL` (ensure `sslmode=require`).
+2. Create a Render Web Service from this repo.
+3. Environment Variables:
+   - `GOOGLE_MAPS_API_KEY=...` (restrict to your domain in GCP)
+   - `DATABASE_URL=...` (from step 1)
+   - `IP_HASH_SALT=...` (optional, to hash IPs)
+4. Build & Start:
+   - Build Command: `npm run render-build`
+   - Start Command: `npm start`
+5. First deploy will run `prisma db push` to create the `Submission` table. Subsequent schema changes can be applied the same way or via `prisma migrate`.
 
 ### Notes / Troubleshooting
 - If the map loads but routing fails, check API key billing and that the Maps JavaScript API is enabled.
