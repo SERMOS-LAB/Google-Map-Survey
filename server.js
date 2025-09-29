@@ -22,7 +22,19 @@ if (!GOOGLE_MAPS_API_KEY) {
   console.warn('[WARN] Google Maps API key not found in .env (expected GOOGLE_MAPS_API_KEY). Map will not load.');
 }
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      // Allow Google Maps assets
+      "script-src": ["'self'", "https://maps.googleapis.com", "'unsafe-inline'"],
+      "img-src": ["'self'", "data:", "https://maps.gstatic.com", "https://maps.googleapis.com"],
+      "style-src": ["'self'", "https:", "'unsafe-inline'"],
+      "connect-src": ["'self'", "https://maps.googleapis.com", "https://maps.gstatic.com"],
+      "font-src": ["'self'", "https:", "data:"]
+    }
+  }
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
