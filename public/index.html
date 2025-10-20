@@ -29,9 +29,22 @@
               match the actual roads you traveled</li>
             <li><strong>Use "Revert"</strong> to undo changes while keeping your
               start/end points</li>
-            <li><strong>Submit when ready</strong> - you can add multiple routes
-              for different trips</li>
+            <li><strong>Submit when ready</strong> - you can submit multiple
+              routes
+              for different evacuation events</li>
           </ol>
+        </div>
+
+        <div class="complex-route-section">
+          <h4>Complex Routes with Return Trips</h4>
+          <p><strong>Example:</strong> Home → School → Destination → Back Home →
+            Back to Destination</p>
+          <p>Map this as <strong>ONE continuous route</strong> with all stops in
+            order. The numbered sequence (1, 2, 3...) shows your actual path,
+            including any return trips.</p>
+          <p><strong>Submit separate routes only for different evacuation
+              events</strong> (different days, times, or completely separate
+            trips).</p>
         </div>
 
         <div class="legend">
@@ -128,7 +141,7 @@
               </label>
             </div>
             <div class="sidebar-buttons">
-              <button id="add-stop" class="secondary">Add Stop</button>
+              <button id="add-stop" class="secondary" disabled>Add Stop</button>
               <button id="btn-clear" class="danger" disabled>Clear</button>
               <button id="btn-revert" class="secondary" disabled>Revert</button>
             </div>

@@ -166,6 +166,26 @@ input[type="text"] { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius
   border-radius: 6px;
 }
 
+.complex-route-section {
+  margin: 16px 0;
+  padding: 12px;
+  background: #eff6ff;
+  border-radius: 6px;
+  border-left: 4px solid #2563eb;
+}
+
+.complex-route-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #1e40af;
+}
+
+.complex-route-section p {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .privacy-section h3 {
   margin: 0 0 8px 0;
   font-size: 14px;

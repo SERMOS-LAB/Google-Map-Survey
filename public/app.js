@@ -242,12 +242,15 @@ function refreshSubmitEnabled() {
   const btnSubmit = document.getElementById('btn-submit');
   const btnClear = document.getElementById('btn-clear');
   const btnRevert = document.getElementById('btn-revert');
+  const btnAddStop = document.getElementById('add-stop');
   if (!btnSubmit) return;
   const hasRoute = !!directionsRenderer && getDrivingOverviewPath().length >= 2 && !drawing;
+  const hasOriginDestination = !!originLatLng && !!destinationLatLng;
   const ok = hasRoute;
   btnSubmit.disabled = !ok;
   if (btnClear) btnClear.disabled = !hasRoute;
   if (btnRevert) btnRevert.disabled = !hasRoute || !lastAutoRoute;
+  if (btnAddStop) btnAddStop.disabled = !hasOriginDestination;
 }
 
 function updateInfo() {
@@ -580,6 +583,12 @@ function initializeMap() {
     
     // Add Stop button functionality
     document.getElementById('add-stop').addEventListener('click', () => {
+      // Check if origin and destination are set
+      if (!originLatLng || !destinationLatLng) {
+        alert('Please set your starting and ending locations first before adding stops.');
+        return;
+      }
+      
       const stopModal = document.getElementById('stop-modal');
       const stopSearch = document.getElementById('stop-search');
       const confirmBtn = document.getElementById('confirm-stop');
@@ -663,6 +672,12 @@ function initializeMap() {
         return;
       }
       // Otherwise, add as an intermediate stop before destination
+      // This should only happen if origin and destination are already set
+      if (!originLatLng || !destinationLatLng) {
+        alert('Please set your starting and ending locations first before adding stops.');
+        return;
+      }
+      
       let stopName = `Stop ${typedStops.length + 1}`;
       
       // Try to get a better name via reverse geocoding
