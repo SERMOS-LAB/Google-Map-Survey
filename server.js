@@ -71,7 +71,8 @@ const PayloadSchema = z.object({
       .optional()
       .nullable(),
     zoom: z.number().int().min(0).max(22).optional().nullable(),
-    mode: z.enum(['freehand', 'driving'])
+    mode: z.enum(['freehand', 'driving']),
+    privacy: z.enum(['intersection', 'grid']).optional()
   })
 });
 
@@ -79,6 +80,37 @@ function hashIp(ip, salt) {
   if (!ip) return null;
   const toHash = `${ip}|${salt || ''}`;
   return crypto.createHash('sha256').update(toHash).digest('hex');
+}
+
+function snapToIntersection(lat, lng) {
+  // Round to nearest 0.001 degrees (approximately 100m)
+  return {
+    lat: Math.round(lat * 1000) / 1000,
+    lng: Math.round(lng * 1000) / 1000
+  };
+}
+
+function snapToGrid(lat, lng) {
+  // Round to nearest 0.01 degrees (approximately 1km - block group size)
+  return {
+    lat: Math.round(lat * 100) / 100,
+    lng: Math.round(lng * 100) / 100
+  };
+}
+
+function processRouteForPrivacy(route, privacyMode) {
+  if (!privacyMode || privacyMode === 'exact') {
+    return route; // No processing needed
+  }
+  
+  return route.map(point => {
+    if (privacyMode === 'intersection') {
+      return snapToIntersection(point.lat, point.lng);
+    } else if (privacyMode === 'grid') {
+      return snapToGrid(point.lat, point.lng);
+    }
+    return point;
+  });
 }
 
 app.post('/api/submit', async (req, res) => {
@@ -89,14 +121,19 @@ app.post('/api/submit', async (req, res) => {
     }
 
     const { route, metadata } = parsed.data;
+    const privacyMode = metadata?.privacy || 'intersection'; // Default to intersection
+    
+    // Process route for privacy
+    const processedRoute = processRouteForPrivacy(route, privacyMode);
+    
     const ip = req.headers['x-forwarded-for']?.toString().split(',')[0].trim() || req.ip || '';
     const ipHash = process.env.IP_HASH_SALT ? hashIp(ip, process.env.IP_HASH_SALT) : null;
     const userAgent = req.headers['user-agent'] || null;
 
     const created = await prisma.submission.create({
       data: {
-        route,
-        metadata: metadata || {},
+        route: processedRoute,
+        metadata: { ...metadata, privacyMode },
         ipHash,
         userAgent
       }

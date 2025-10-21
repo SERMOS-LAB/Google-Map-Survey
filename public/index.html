@@ -16,6 +16,15 @@
     <div id="instruction-modal" class="modal">
       <div class="modal-content">
         <h2>How to Map Your Evacuation Route</h2>
+        <div class="video-container">
+          <video controls width="100%"
+            style="max-width: 600px; margin: 0 auto; display: block;">
+            <source src="/data/tutorial.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+          <p class="video-caption">Watch this tutorial to learn how to use the
+            mapping tool</p>
+        </div>
         <div class="instructions">
           <ol>
             <li><strong>Enter your starting location</strong> - where you began
@@ -58,12 +67,11 @@
           <h3>Privacy Options</h3>
           <p>If your trip starts or ends at home, please choose how to protect
             your privacy:</p>
-          <label><input type="radio" name="privacy" value="exact" checked> Store
-            exact coordinates</label>
-          <label><input type="radio" name="privacy" value="intersection"> Snap
+          <label><input type="radio" name="privacy" value="intersection"
+              checked> Snap
             to nearest major intersection</label>
           <label><input type="radio" name="privacy" value="grid"> Store only
-            general area (grid cell)</label>
+            general area (grid cell - block group size)</label>
         </div>
 
         <div class="modal-buttons">
@@ -83,6 +91,27 @@
         <div class="modal-buttons">
           <button id="cancel-stop" class="secondary">Cancel</button>
           <button id="confirm-stop" class="primary" disabled>Add Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submission Success Modal -->
+    <div id="success-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Route Submitted Successfully!</h3>
+        <p>Your evacuation route has been saved. Please copy the submission ID
+          below and paste it into Qualtrics to continue with the survey.</p>
+        <div class="submission-id-container">
+          <input id="submission-id" type="text" readonly
+            style="width: 100%; padding: 8px; margin: 10px 0; font-family: monospace; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px;" />
+          <button id="copy-id" class="primary"
+            style="width: 100%; margin-bottom: 10px;">Copy Submission
+            ID</button>
+        </div>
+        <div class="modal-buttons">
+          <button id="submit-another" class="secondary">Submit Another
+            Route</button>
+          <button id="close-success" class="primary">Done</button>
         </div>
       </div>
     </div>

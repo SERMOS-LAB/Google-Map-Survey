@@ -119,6 +119,24 @@ input[type="text"] { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius
   color: #0f172a;
 }
 
+.video-container {
+  margin: 20px 0;
+  text-align: center;
+}
+
+.video-container video {
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.video-caption {
+  margin: 8px 0 0 0;
+  font-size: 14px;
+  color: #64748b;
+  font-style: italic;
+  text-align: center;
+}
+
 .instructions ol {
   margin: 16px 0;
   padding-left: 20px;

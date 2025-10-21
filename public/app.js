@@ -414,6 +414,9 @@ async function submitRoute() {
   }
   const title = document.getElementById('title').value.trim();
   const description = document.getElementById('description').value.trim();
+  
+  // Get privacy choice from instruction modal
+  const privacyChoice = document.querySelector('input[name="privacy"]:checked')?.value || 'intersection';
 
   const payload = {
     route: path,
@@ -422,7 +425,8 @@ async function submitRoute() {
       description,
       center: map.getCenter() ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : null,
       zoom: map.getZoom(),
-      mode: isDrivingMode() ? 'driving' : 'freehand'
+      mode: isDrivingMode() ? 'driving' : 'freehand',
+      privacy: privacyChoice
     }
   };
 
@@ -433,8 +437,7 @@ async function submitRoute() {
   });
   const data = await res.json();
   if (res.ok) {
-    alert(`Thanks! Your submission id: ${data.id}`);
-    clearRoute();
+    showSuccessModal(data.id);
   } else {
     alert('Submission failed: ' + (data.error || 'Unknown error'));
   }
@@ -712,10 +715,56 @@ function initializeMap() {
       updateRouteWithTypedStops();
     });
 
+    // Success modal event listeners
+    setupSuccessModal();
+
   } catch (e) {
     console.error(e);
     alert('Failed to initialize the map.');
   }
+}
+
+function showSuccessModal(submissionId) {
+  const modal = document.getElementById('success-modal');
+  const submissionIdInput = document.getElementById('submission-id');
+  
+  submissionIdInput.value = submissionId;
+  modal.classList.remove('hidden');
+}
+
+function setupSuccessModal() {
+  const modal = document.getElementById('success-modal');
+  const copyBtn = document.getElementById('copy-id');
+  const submitAnotherBtn = document.getElementById('submit-another');
+  const closeBtn = document.getElementById('close-success');
+  const submissionIdInput = document.getElementById('submission-id');
+  
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(submissionIdInput.value);
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy Submission ID';
+      }, 2000);
+    } catch (err) {
+      // Fallback for older browsers
+      submissionIdInput.select();
+      document.execCommand('copy');
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy Submission ID';
+      }, 2000);
+    }
+  });
+  
+  submitAnotherBtn.addEventListener('click', () => {
+    modal.classList.add('hidden');
+    clearRoute();
+  });
+  
+  closeBtn.addEventListener('click', () => {
+    modal.classList.add('hidden');
+  });
 }
 
 window.addEventListener('DOMContentLoaded', init);
