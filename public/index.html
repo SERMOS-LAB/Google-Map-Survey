@@ -65,8 +65,8 @@
 
         <div class="privacy-section">
           <h3>Privacy Options</h3>
-          <p>If your trip starts or ends at home, please choose how to protect
-            your privacy:</p>
+          <p>We are not collecting specific location coordinates. Please choose
+            your preferred privacy level:</p>
           <label><input type="radio" name="privacy" value="intersection"
               checked> Snap
             to nearest major intersection</label>
@@ -125,30 +125,16 @@
               map to add stops in between. Drag the route to adjust. Submit when
               ready</p>
           </div>
-          <button id="show-instructions" class="secondary">Instructions</button>
+          <div class="header-buttons">
+            <button id="show-instructions"
+              class="secondary">Instructions</button>
+            <button id="btn-submit" class="success" disabled>Submit
+              Route</button>
+          </div>
         </div>
       </header>
 
       <main>
-        <section class="controls">
-          <div class="row" style="color:#475569; font-size:12px;">
-          </div>
-          <div class="row">
-            <label style="flex:1; min-width:200px;">
-              <span>Title (optional)</span>
-              <input id="title" type="text"
-                placeholder="Morning commute, hiking path, etc." />
-            </label>
-            <label style="flex:1; min-width:200px;">
-              <span>Description (optional)</span>
-              <input id="description" type="text"
-                placeholder="Any notes about this route" />
-            </label>
-            <button id="btn-submit" class="success" disabled>Submit
-              Route</button>
-          </div>
-        </section>
-
         <div class="map-layout">
           <div id="map"></div>
           <div class="sidebar" id="stops-sidebar">

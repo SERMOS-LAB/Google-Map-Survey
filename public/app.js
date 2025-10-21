@@ -412,8 +412,6 @@ async function submitRoute() {
     alert('Please draw a route with at least two points.');
     return;
   }
-  const title = document.getElementById('title').value.trim();
-  const description = document.getElementById('description').value.trim();
   
   // Get privacy choice from instruction modal
   const privacyChoice = document.querySelector('input[name="privacy"]:checked')?.value || 'intersection';
@@ -421,8 +419,6 @@ async function submitRoute() {
   const payload = {
     route: path,
     metadata: {
-      title,
-      description,
       center: map.getCenter() ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : null,
       zoom: map.getZoom(),
       mode: isDrivingMode() ? 'driving' : 'freehand',
