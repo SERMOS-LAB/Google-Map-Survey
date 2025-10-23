@@ -22,7 +22,7 @@ An Express + Google Maps app for collecting realistic evacuation routes with com
 
 **Privacy & Ethics:**
 
-- Random buffer zones (100-200m) applied to all route locations for enhanced privacy protection
+- Random buffer zones (100-200m) applied with complete route generalization for maximum privacy protection
 - Multiple privacy options: nearest major intersection or grid cell storage
 - IP hashing for user anonymity
 - Route-level privacy filtering removes sensitive GPS points within buffer zones
@@ -145,8 +145,8 @@ model Submission {
 
 ### Privacy & Ethics Compliance
 
-- **Random Buffer Privacy:** 100-200m random buffer zones applied to all route locations (buffer size not recorded)
-- **Route-Level Protection:** GPS points within buffer zones filtered and replaced with generalized coordinates
+- **Complete Route Generalization:** All GPS points generalized to intersection coordinates for maximum privacy protection
+- **Random Buffer Privacy:** 100-200m random buffer zones applied (buffer size not recorded)
 - **Location Anonymization:** Coordinates snapped to intersections or grid cells
 - **IP Protection:** Client IPs are hashed before storage
 - **User Consent:** Clear privacy options presented before data collection
