@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { z } from 'zod';
@@ -16,6 +17,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
+
+// Enable CORS for all routes
+app.use(cors());
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || process.env.MAPS_API_KEY || '';
 if (!GOOGLE_MAPS_API_KEY) {
@@ -63,6 +67,7 @@ const LatLngSchema = z.object({
 });
 const PayloadSchema = z.object({
   route: z.array(LatLngSchema).min(2).max(10000),
+  stops: z.array(LatLngSchema).optional(), // Optional stops array from client
   metadata: z.object({
     title: z.string().max(300).optional().nullable(),
     description: z.string().max(2000).optional().nullable(),
@@ -117,13 +122,17 @@ function snapToGrid(lat, lng) {
   };
 }
 
-function extractStopsFromRoute(route) {
+function extractStopsFromRoute(route, clientStops = []) {
   if (route.length < 2) return [];
   
-  // Extract all stops from the route
-  // For now, we'll treat all route points as potential stops
-  // This provides comprehensive privacy protection for all locations
-  return route;
+  // Use client-provided stops if available, otherwise fallback to first/last
+  if (clientStops && clientStops.length > 0) {
+    return clientStops;
+  }
+  
+  // Fallback: extract first and last points as stops
+  const stops = [route[0], route[route.length - 1]];
+  return stops;
 }
 
 function applyRandomBufferPrivacy(route, stops) {
@@ -144,27 +153,39 @@ function applyRandomBufferPrivacy(route, stops) {
     );
     
     if (!isInAnyBuffer) {
+      // Keep exact GPS coordinates for route segments outside stop buffers
       filteredRoute.push(point);
-    } else {
-      // Replace with generalized point
-      filteredRoute.push(snapToIntersection(point.lat, point.lng));
     }
+    // Discard points within stop buffers (don't add them to filteredRoute)
   }
   
   return { filteredRoute, processedStops };
 }
 
 function processRouteForPrivacy(route, privacyMode, stops = []) {
+  console.log(`Processing route: ${route.length} points, privacy: ${privacyMode}, stops: ${stops.length}`);
+  
   if (!privacyMode || privacyMode === 'exact') {
+    console.log('No privacy processing needed');
     return route; // No processing needed
   }
   
-  // Apply random buffer privacy for all modes
-  if (stops.length > 0) {
-    const { filteredRoute } = applyRandomBufferPrivacy(route, stops);
+  // Always apply buffer privacy for intersection and grid modes
+  // If no stops provided, extract them from the route
+  let stopsToUse = stops;
+  if (stopsToUse.length === 0) {
+    stopsToUse = extractStopsFromRoute(route);
+    console.log(`Extracted ${stopsToUse.length} stops from route`);
+  }
+  
+  if (stopsToUse.length > 0) {
+    console.log(`Applying buffer privacy with ${stopsToUse.length} stops`);
+    const { filteredRoute } = applyRandomBufferPrivacy(route, stopsToUse);
+    console.log(`Buffer privacy result: ${filteredRoute.length} points (removed ${route.length - filteredRoute.length})`);
     return filteredRoute;
   }
   
+  console.log('No stops available, falling back to snapping');
   // Fallback to original snapping for backward compatibility
   return route.map(point => {
     if (privacyMode === 'intersection') {
@@ -176,6 +197,34 @@ function processRouteForPrivacy(route, privacyMode, stops = []) {
   });
 }
 
+// API endpoint to get route data for visualization
+app.get('/api/route/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const submission = await prisma.submission.findUnique({
+      where: { id }
+    });
+    
+    if (!submission) {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+    
+    // Get stops from metadata (if available) or extract from route
+    const stops = submission.metadata.stops || extractStopsFromRoute(submission.route);
+    
+    res.json({
+      id: submission.id,
+      route: submission.route,
+      stops: stops, // Include the actual stops
+      metadata: submission.metadata,
+      submittedAt: submission.submittedAt
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch route' });
+  }
+});
+
 app.post('/api/submit', async (req, res) => {
   try {
     const parsed = PayloadSchema.safeParse(req.body);
@@ -183,11 +232,11 @@ app.post('/api/submit', async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload' });
     }
 
-    const { route, metadata } = parsed.data;
+    const { route, stops: clientStops, metadata } = parsed.data;
     const privacyMode = metadata?.privacy || 'intersection'; // Default to intersection
     
-    // Extract stops from route (first, last, and any intermediate stops)
-    const stops = extractStopsFromRoute(route);
+    // Extract stops from route (use client-provided stops if available)
+    const stops = extractStopsFromRoute(route, clientStops);
     
     // Process route for privacy with random buffer zones
     const processedRoute = processRouteForPrivacy(route, privacyMode, stops);
@@ -199,7 +248,7 @@ app.post('/api/submit', async (req, res) => {
     const created = await prisma.submission.create({
       data: {
         route: processedRoute,
-        metadata: { ...metadata, privacyMode },
+        metadata: { ...metadata, privacyMode, stops },
         ipHash,
         userAgent
       }

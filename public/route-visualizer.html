@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Route Reconstruction Visualization</title>
+        <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            height: 600px;
+            width: 100%;
+            border: 2px solid #333;
+            margin-top: 20px;
+        }
+        .info {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .stat {
+            background: white;
+            padding: 10px;
+            border-radius: 3px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+    </head>
+    <body>
+        <h1>Route Reconstruction Visualization</h1>
+        <div class="info">
+            <h3>Submission Analysis: cmh3pnt4h0000yaomm7lj5p55</h3>
+            <p>This visualization shows the reconstructed evacuation route with
+                detailed GPS points.</p>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="point-count">Loading...</div>
+                    <div class="stat-label">GPS Points</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="route-length">Loading...</div>
+                    <div class="stat-label">Route Length</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="precision">Loading...</div>
+                    <div class="stat-label">Precision</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="density">Loading...</div>
+                    <div class="stat-label">Point Density</div>
+                </div>
+            </div>
+        </div>
+        <div id="map"></div>
+
+        <script>
+        let map;
+        let routePolyline;
+        let markers = [];
+
+        async function loadRouteData() {
+            try {
+                console.log('Fetching route data...');
+                const response = await fetch('/api/route/cmh3pnt4h0000yaomm7lj5p55');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                console.log('Route data loaded:', data.route.length, 'points');
+                console.log('Stops data loaded:', data.stops.length, 'stops');
+                return { route: data.route, stops: data.stops };
+            } catch (error) {
+                console.error('Error fetching route:', error);
+                document.getElementById('map').innerHTML = '<div style="padding: 20px; text-align: center; color: red;">Error loading route data: ' + error.message + '</div>';
+                return { route: [], stops: [] };
+            }
+        }
+
+        function calculateRouteStats(route) {
+            const pointCount = route.length;
+            
+            // Calculate total distance
+            let totalDistance = 0;
+            for (let i = 1; i < route.length; i++) {
+                const prev = route[i-1];
+                const curr = route[i];
+                const distance = Math.sqrt(
+                    Math.pow(curr.lat - prev.lat, 2) + 
+                    Math.pow(curr.lng - prev.lng, 2)
+                ) * 111000; // Rough conversion to meters
+                totalDistance += distance;
+            }
+            
+            // Calculate precision
+            const samplePoint = route[0];
+            const latPrecision = samplePoint.lat.toString().split('.')[1]?.length || 0;
+            const lngPrecision = samplePoint.lng.toString().split('.')[1]?.length || 0;
+            const precision = Math.max(latPrecision, lngPrecision);
+            
+            // Calculate point density
+            const avgDistance = totalDistance / route.length;
+            
+            return {
+                pointCount,
+                totalDistance: Math.round(totalDistance),
+                precision,
+                avgDistance: Math.round(avgDistance * 10) / 10
+            };
+        }
+
+        function updateStats(stats) {
+            document.getElementById('point-count').textContent = stats.pointCount.toLocaleString();
+            document.getElementById('route-length').textContent = `${Math.round(stats.totalDistance / 1000 * 10) / 10} km`;
+            document.getElementById('precision').textContent = `${stats.precision} decimals`;
+            document.getElementById('density').textContent = `${stats.avgDistance}m avg`;
+        }
+
+        function visualizeRoute(route, stops) {
+            if (!map) return;
+
+            // Clear existing route
+            if (routePolyline) {
+                routePolyline.setMap(null);
+            }
+            markers.forEach(marker => marker.setMap(null));
+            markers = [];
+
+            // Create route polyline
+            routePolyline = new google.maps.Polyline({
+                path: route,
+                geodesic: true,
+                strokeColor: '#FF0000',
+                strokeOpacity: 1.0,
+                strokeWeight: 3
+            });
+            routePolyline.setMap(map);
+
+            // Add markers for actual stops only
+            if (stops && stops.length > 0) {
+                console.log('Creating markers for', stops.length, 'stops');
+                stops.forEach((stop, index) => {
+                    let label, title, color;
+                    
+                    if (index === 0) {
+                        label = 'A';
+                        title = 'Start Point (A)';
+                        color = '#00FF00'; // Green
+                    } else if (index === 1) {
+                        label = 'B';
+                        title = 'End Point (B)';
+                        color = '#FF0000'; // Red
+                    } else {
+                        label = String(index - 1); // Intermediate stops start from 1
+                        title = `Stop ${index - 1}`;
+                        color = '#0000FF'; // Blue
+                    }
+                    
+                    console.log(`Creating marker ${index}: ${label} at`, stop);
+                    
+                    const marker = new google.maps.Marker({
+                        position: stop,
+                        map: map,
+                        title: title,
+                        label: {
+                            text: label,
+                            color: 'white',
+                            fontSize: '16px',
+                            fontWeight: 'bold'
+                        },
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            fillColor: color,
+                            fillOpacity: 1,
+                            strokeColor: 'white',
+                            strokeWeight: 2,
+                            scale: 20
+                        }
+                    });
+                    markers.push(marker);
+                });
+                console.log('Created', markers.length, 'markers total');
+            } else {
+                console.log('No stops provided for markers');
+            }
+
+            // Fit map to show entire route
+            const bounds = new google.maps.LatLngBounds();
+            route.forEach(point => bounds.extend(point));
+            map.fitBounds(bounds);
+        }
+
+        async function initMap() {
+            try {
+                // Use API key directly with fallback
+                const apiKey = 'AIzaSyBavGGi1djeyu3k4rg9FryQRshdIoCbk78';
+                
+                console.log('Loading Google Maps with API key...');
+
+                // Load Google Maps
+                const script = document.createElement('script');
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry`;
+                script.async = true;
+                script.defer = true;
+                document.head.appendChild(script);
+
+                script.onload = async () => {
+                    try {
+                        console.log('Google Maps loaded successfully');
+                        
+                        // Initialize map
+                        map = new google.maps.Map(document.getElementById('map'), {
+                            center: { lat: 34.0522, lng: -118.2437 },
+                            zoom: 10,
+                            mapTypeId: google.maps.MapTypeId.ROADMAP
+                        });
+                        
+                        console.log('Map initialized');
+
+                        // Load and visualize route
+                        console.log('Loading route data...');
+                        const data = await loadRouteData();
+                        
+                        if (data.route.length === 0) {
+                            console.error('No route data available');
+                            document.getElementById('map').innerHTML = '<div style="padding: 20px; text-align: center; color: red;">No route data available</div>';
+                            return;
+                        }
+                        
+                        console.log('Visualizing route with', data.route.length, 'points and', data.stops.length, 'stops');
+                        const stats = calculateRouteStats(data.route);
+                        
+                        updateStats(stats);
+                        visualizeRoute(data.route, data.stops);
+
+                        console.log('Route visualization complete!');
+                        console.log('Stats:', stats);
+                    } catch (error) {
+                        console.error('Error in script.onload:', error);
+                        document.getElementById('map').innerHTML = '<div style="padding: 20px; text-align: center; color: red;">Error: ' + error.message + '</div>';
+                    }
+                };
+
+                script.onerror = () => {
+                    document.getElementById('map').innerHTML = '<div style="padding: 20px; text-align: center; color: red;">Failed to load Google Maps</div>';
+                };
+
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                document.getElementById('map').innerHTML = '<div style="padding: 20px; text-align: center; color: red;">Error: ' + error.message + '</div>';
+            }
+        }
+
+        // Start when page loads
+        window.addEventListener('DOMContentLoaded', initMap);
+    </script>
+    </body>
+</html>

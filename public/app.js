@@ -221,12 +221,36 @@ function setButtonsState(state) {
   }
 }
 
-function getDrivingOverviewPath() {
+function getDrivingDetailedPath() {
   if (!directionsRenderer) return [];
   const dr = directionsRenderer.getDirections();
   if (!dr || !dr.routes || dr.routes.length === 0) return [];
-  const overview = dr.routes[0].overview_path || [];
-  return overview.map(ll => ({ lat: ll.lat(), lng: ll.lng() }));
+  
+  // Extract detailed route from all legs and steps
+  const detailedPath = [];
+  const route = dr.routes[0];
+  
+  if (route.legs) {
+    route.legs.forEach(leg => {
+      if (leg.steps) {
+        leg.steps.forEach(step => {
+          if (step.path) {
+            step.path.forEach(point => {
+              detailedPath.push({ lat: point.lat(), lng: point.lng() });
+            });
+          }
+        });
+      }
+    });
+  }
+  
+  // Fallback to overview_path if no detailed path available
+  if (detailedPath.length === 0) {
+    const overview = route.overview_path || [];
+    return overview.map(ll => ({ lat: ll.lat(), lng: ll.lng() }));
+  }
+  
+  return detailedPath;
 }
 
 function getDrivingTotalMeters() {
@@ -244,7 +268,7 @@ function refreshSubmitEnabled() {
   const btnRevert = document.getElementById('btn-revert');
   const btnAddStop = document.getElementById('add-stop');
   if (!btnSubmit) return;
-  const hasRoute = !!directionsRenderer && getDrivingOverviewPath().length >= 2 && !drawing;
+  const hasRoute = !!directionsRenderer && getDrivingDetailedPath().length >= 2 && !drawing;
   const hasOriginDestination = !!originLatLng && !!destinationLatLng;
   const ok = hasRoute;
   btnSubmit.disabled = !ok;
@@ -258,7 +282,7 @@ function updateInfo() {
   const lengthEl = document.getElementById('route-length');
 
   if (isDrivingMode()) {
-    const path = getDrivingOverviewPath();
+    const path = getDrivingDetailedPath();
     countEl.textContent = String(path.length);
     const meters = getDrivingTotalMeters();
     lengthEl.textContent = `${Math.round(meters)} m`;
@@ -400,7 +424,7 @@ function updateInfoFromPathEvent() {
 
 function getRoutePath() {
   if (isDrivingMode()) {
-    return getDrivingOverviewPath();
+    return getDrivingDetailedPath();
   }
   if (!polyline) return [];
   return polyline.getPath().getArray().map(ll => ({ lat: ll.lat(), lng: ll.lng() }));
@@ -416,8 +440,18 @@ async function submitRoute() {
   // Get privacy choice from instruction modal
   const privacyChoice = document.querySelector('input[name="privacy"]:checked')?.value || 'intersection';
 
+  // Extract stops information
+  const stops = [];
+  if (originLatLng) stops.push(originLatLng);
+  if (destinationLatLng) stops.push(destinationLatLng);
+  // Add intermediate stops
+  typedStops.forEach(stop => {
+    stops.push({ lat: stop.lat, lng: stop.lng });
+  });
+
   const payload = {
     route: path,
+    stops: stops, // Send stops information to server
     metadata: {
       center: map.getCenter() ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : null,
       zoom: map.getZoom(),
