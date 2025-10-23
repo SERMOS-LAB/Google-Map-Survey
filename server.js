@@ -120,12 +120,10 @@ function snapToGrid(lat, lng) {
 function extractStopsFromRoute(route) {
   if (route.length < 2) return [];
   
-  // Extract first and last points as primary stops
-  const stops = [route[0], route[route.length - 1]];
-  
-  // For now, we'll use first and last stops
-  // In the future, we could detect intermediate stops by analyzing route patterns
-  return stops;
+  // Extract all stops from the route
+  // For now, we'll treat all route points as potential stops
+  // This provides comprehensive privacy protection for all locations
+  return route;
 }
 
 function applyRandomBufferPrivacy(route, stops) {
