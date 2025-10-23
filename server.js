@@ -82,6 +82,25 @@ function hashIp(ip, salt) {
   return crypto.createHash('sha256').update(toHash).digest('hex');
 }
 
+function generateRandomBuffer() {
+  // Generate random buffer between 100-200m
+  const minBuffer = 100; // meters
+  const maxBuffer = 200; // meters
+  return Math.random() * (maxBuffer - minBuffer) + minBuffer;
+}
+
+function getDistance(point1, point2) {
+  // Haversine formula for accurate distance calculation in meters
+  const R = 6371000; // Earth's radius in meters
+  const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+  const dLng = (point2.lng - point1.lng) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 function snapToIntersection(lat, lng) {
   // Round to nearest 0.001 degrees (approximately 100m)
   return {
@@ -98,11 +117,57 @@ function snapToGrid(lat, lng) {
   };
 }
 
-function processRouteForPrivacy(route, privacyMode) {
+function extractStopsFromRoute(route) {
+  if (route.length < 2) return [];
+  
+  // Extract first and last points as primary stops
+  const stops = [route[0], route[route.length - 1]];
+  
+  // For now, we'll use first and last stops
+  // In the future, we could detect intermediate stops by analyzing route patterns
+  return stops;
+}
+
+function applyRandomBufferPrivacy(route, stops) {
+  const bufferRadius = generateRandomBuffer(); // Don't store this!
+  
+  const filteredRoute = [];
+  const processedStops = stops.map(stop => ({
+    ...stop,
+    // Apply buffer to stop coordinates
+    lat: snapToIntersection(stop.lat, stop.lng).lat,
+    lng: snapToIntersection(stop.lat, stop.lng).lng
+  }));
+  
+  // Filter route points within buffer zones of any stop
+  for (const point of route) {
+    const isInAnyBuffer = stops.some(stop => 
+      getDistance(point, stop) < bufferRadius
+    );
+    
+    if (!isInAnyBuffer) {
+      filteredRoute.push(point);
+    } else {
+      // Replace with generalized point
+      filteredRoute.push(snapToIntersection(point.lat, point.lng));
+    }
+  }
+  
+  return { filteredRoute, processedStops };
+}
+
+function processRouteForPrivacy(route, privacyMode, stops = []) {
   if (!privacyMode || privacyMode === 'exact') {
     return route; // No processing needed
   }
   
+  // Apply random buffer privacy for all modes
+  if (stops.length > 0) {
+    const { filteredRoute } = applyRandomBufferPrivacy(route, stops);
+    return filteredRoute;
+  }
+  
+  // Fallback to original snapping for backward compatibility
   return route.map(point => {
     if (privacyMode === 'intersection') {
       return snapToIntersection(point.lat, point.lng);
@@ -123,8 +188,11 @@ app.post('/api/submit', async (req, res) => {
     const { route, metadata } = parsed.data;
     const privacyMode = metadata?.privacy || 'intersection'; // Default to intersection
     
-    // Process route for privacy
-    const processedRoute = processRouteForPrivacy(route, privacyMode);
+    // Extract stops from route (first, last, and any intermediate stops)
+    const stops = extractStopsFromRoute(route);
+    
+    // Process route for privacy with random buffer zones
+    const processedRoute = processRouteForPrivacy(route, privacyMode, stops);
     
     const ip = req.headers['x-forwarded-for']?.toString().split(',')[0].trim() || req.ip || '';
     const ipHash = process.env.IP_HASH_SALT ? hashIp(ip, process.env.IP_HASH_SALT) : null;
