@@ -169,13 +169,13 @@
                         label = 'A';
                         title = 'Start Point (A)';
                         color = '#00FF00'; // Green
-                    } else if (index === 1) {
+                    } else if (index === stops.length - 1) {
                         label = 'B';
                         title = 'End Point (B)';
                         color = '#FF0000'; // Red
                     } else {
-                        label = String(index - 1); // Intermediate stops start from 1
-                        title = `Stop ${index - 1}`;
+                        label = String(index); // Intermediate stops start from 1
+                        title = `Stop ${index}`;
                         color = '#0000FF'; // Blue
                     }
                     
