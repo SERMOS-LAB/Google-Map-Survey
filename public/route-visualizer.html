@@ -77,10 +77,15 @@
         let routePolyline;
         let markers = [];
 
-        async function loadRouteData() {
+        function getSubmissionId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id') || 'cmh3pnt4h0000yaomm7lj5p55';
+        }
+
+        async function loadRouteData(submissionId) {
             try {
                 console.log('Fetching route data...');
-                const response = await fetch('/api/route/cmh3pnt4h0000yaomm7lj5p55');
+                const response = await fetch(`/api/route/${submissionId}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -210,10 +215,21 @@
 
         async function initMap() {
             try {
-                // Use API key directly with fallback
-                const apiKey = 'AIzaSyBavGGi1djeyu3k4rg9FryQRshdIoCbk78';
+                const submissionId = getSubmissionId();
+                const header = document.querySelector('.info h3');
+                if (header) {
+                    header.textContent = `Submission Analysis: ${submissionId}`;
+                }
+
+                const configRes = await fetch('/config');
+                const config = await configRes.json();
+                const apiKey = config.googleMapsApiKey || '';
                 
                 console.log('Loading Google Maps with API key...');
+                if (!apiKey) {
+                    document.getElementById('map').innerHTML = '<div style="padding: 20px; text-align: center; color: red;">Google Maps API key missing</div>';
+                    return;
+                }
 
                 // Load Google Maps
                 const script = document.createElement('script');
@@ -237,7 +253,7 @@
 
                         // Load and visualize route
                         console.log('Loading route data...');
-                        const data = await loadRouteData();
+                        const data = await loadRouteData(submissionId);
                         
                         if (data.route.length === 0) {
                             console.error('No route data available');

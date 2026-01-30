@@ -22,11 +22,11 @@ An Express + Google Maps app for collecting realistic evacuation routes with com
 
 **Privacy & Ethics:**
 
-- Random buffer zones (100-200m) applied around all stops (A, B, and intermediate stops) with exact route preservation
+- Random buffer zones (100-200m) applied around all stops (A, B, and intermediate stops); points within buffers are discarded
 - Multiple privacy options: nearest major intersection or grid cell storage
 - IP hashing for user anonymity
 - Route-level privacy filtering removes sensitive GPS points within buffer zones
-- No exact coordinates collected; buffer sizes not recorded
+- Exact coordinates preserved outside buffers for route reconstruction; buffer sizes not recorded
 - Transparent data handling communication
 
 **Research Integration:**
@@ -118,11 +118,13 @@ For complex evacuation scenarios (e.g., Home → School → Destination → Back
     ```json
     {
       "route": [{ "lat": 0, "lng": 0 }, ...],
+      "stops": [{ "lat": 0, "lng": 0 }, ...],
       "metadata": { 
         "center": {"lat":0, "lng":0}, 
         "zoom": 12, 
         "mode": "driving",
-        "privacy": "intersection" // or "grid"
+        "privacy": "intersection", // or "grid"
+        "consentRawStops": false
       }
     }
     ```
@@ -137,7 +139,7 @@ model Submission {
   id          String   @id @default(cuid())
   submittedAt DateTime @default(now())
   route       Json     // Privacy-processed coordinates
-  metadata    Json     // Includes privacy mode, map settings
+  metadata    Json     // Includes privacy mode, stop list, stats, consent
   ipHash      String?  // Hashed IP for anonymity
   userAgent   String?
 }
@@ -148,7 +150,7 @@ model Submission {
 - **Stop-Level Privacy:** Random buffer zones (100-200m) around all stops (A, B, and intermediate stops)
 - **Route Preservation:** Exact GPS coordinates preserved for route segments outside buffers
 - **Buffer Privacy:** Buffer size varies per submission (not recorded)
-- **Location Anonymization:** Coordinates snapped to intersections or grid cells
+- **Location Anonymization:** Stops snapped to intersections or grid cells
 - **IP Protection:** Client IPs are hashed before storage
 - **User Consent:** Clear privacy options presented before data collection
 - **Data Minimization:** Only necessary route data is collected

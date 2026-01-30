@@ -247,7 +247,7 @@ function getDrivingDetailedPath() {
   // Fallback to overview_path if no detailed path available
   if (detailedPath.length === 0) {
     const overview = route.overview_path || [];
-    return overview.map(ll => ({ lat: ll.lat(), lng: ll.lng() }));
+  return overview.map(ll => ({ lat: ll.lat(), lng: ll.lng() }));
   }
   
   return detailedPath;
@@ -271,7 +271,7 @@ function refreshSubmitEnabled() {
   const hasRoute = !!directionsRenderer && getDrivingDetailedPath().length >= 2 && !drawing;
   const hasOriginDestination = !!originLatLng && !!destinationLatLng;
   const ok = hasRoute;
-  btnSubmit.disabled = !ok;
+    btnSubmit.disabled = !ok;
   if (btnClear) btnClear.disabled = !hasRoute;
   if (btnRevert) btnRevert.disabled = !hasRoute || !lastAutoRoute;
   if (btnAddStop) btnAddStop.disabled = !hasOriginDestination;
@@ -339,7 +339,7 @@ function clearDriving() {
 }
 
 function clearRoute() {
-  clearDriving();
+    clearDriving();
   if (polyline) { polyline.setMap(null); polyline = null; }
   clearPreview();
   teardownListeners();
@@ -439,15 +439,16 @@ async function submitRoute() {
   
   // Get privacy choice from instruction modal
   const privacyChoice = document.querySelector('input[name="privacy"]:checked')?.value || 'intersection';
+  const consentRawStops = !!document.getElementById('consent-raw-stops')?.checked;
 
-  // Extract stops information
+  // Extract stops information in route order: A, intermediates, B
   const stops = [];
   if (originLatLng) stops.push(originLatLng);
-  if (destinationLatLng) stops.push(destinationLatLng);
-  // Add intermediate stops
+  // Add intermediate stops in order
   typedStops.forEach(stop => {
     stops.push({ lat: stop.lat, lng: stop.lng });
   });
+  if (destinationLatLng) stops.push(destinationLatLng);
 
   const payload = {
     route: path,
@@ -456,7 +457,8 @@ async function submitRoute() {
       center: map.getCenter() ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : null,
       zoom: map.getZoom(),
       mode: isDrivingMode() ? 'driving' : 'freehand',
-      privacy: privacyChoice
+      privacy: privacyChoice,
+      consentRawStops
     }
   };
 

@@ -135,15 +135,20 @@ function extractStopsFromRoute(route, clientStops = []) {
   return stops;
 }
 
-function applyRandomBufferPrivacy(route, stops) {
+function applyRandomBufferPrivacy(route, stops, privacyMode) {
   const bufferRadius = generateRandomBuffer(); // Don't store this!
   
   const filteredRoute = [];
+  const snapStop = (stop) => {
+    if (privacyMode === 'grid') {
+      return snapToGrid(stop.lat, stop.lng);
+    }
+    return snapToIntersection(stop.lat, stop.lng);
+  };
   const processedStops = stops.map(stop => ({
     ...stop,
-    // Apply buffer to stop coordinates
-    lat: snapToIntersection(stop.lat, stop.lng).lat,
-    lng: snapToIntersection(stop.lat, stop.lng).lng
+    // Apply privacy snapping to stop coordinates
+    ...snapStop(stop)
   }));
   
   // Filter route points within buffer zones of any stop
@@ -159,7 +164,8 @@ function applyRandomBufferPrivacy(route, stops) {
     // Discard points within stop buffers (don't add them to filteredRoute)
   }
   
-  return { filteredRoute, processedStops };
+  const removedCount = route.length - filteredRoute.length;
+  return { filteredRoute, processedStops, removedCount };
 }
 
 function processRouteForPrivacy(route, privacyMode, stops = []) {
@@ -167,7 +173,7 @@ function processRouteForPrivacy(route, privacyMode, stops = []) {
   
   if (!privacyMode || privacyMode === 'exact') {
     console.log('No privacy processing needed');
-    return route; // No processing needed
+    return { route, processedStops: stops, removedCount: 0 };
   }
   
   // Always apply buffer privacy for intersection and grid modes
@@ -180,14 +186,14 @@ function processRouteForPrivacy(route, privacyMode, stops = []) {
   
   if (stopsToUse.length > 0) {
     console.log(`Applying buffer privacy with ${stopsToUse.length} stops`);
-    const { filteredRoute } = applyRandomBufferPrivacy(route, stopsToUse);
-    console.log(`Buffer privacy result: ${filteredRoute.length} points (removed ${route.length - filteredRoute.length})`);
-    return filteredRoute;
+    const { filteredRoute, processedStops, removedCount } = applyRandomBufferPrivacy(route, stopsToUse, privacyMode);
+    console.log(`Buffer privacy result: ${filteredRoute.length} points (removed ${removedCount})`);
+    return { route: filteredRoute, processedStops, removedCount };
   }
   
   console.log('No stops available, falling back to snapping');
   // Fallback to original snapping for backward compatibility
-  return route.map(point => {
+  const snappedRoute = route.map(point => {
     if (privacyMode === 'intersection') {
       return snapToIntersection(point.lat, point.lng);
     } else if (privacyMode === 'grid') {
@@ -195,6 +201,7 @@ function processRouteForPrivacy(route, privacyMode, stops = []) {
     }
     return point;
   });
+  return { route: snappedRoute, processedStops: [], removedCount: 0 };
 }
 
 // API endpoint to get route data for visualization
@@ -234,12 +241,13 @@ app.post('/api/submit', async (req, res) => {
 
     const { route, stops: clientStops, metadata } = parsed.data;
     const privacyMode = metadata?.privacy || 'intersection'; // Default to intersection
+    const consentRawStops = !!metadata?.consentRawStops;
     
     // Extract stops from route (use client-provided stops if available)
     const stops = extractStopsFromRoute(route, clientStops);
     
     // Process route for privacy with random buffer zones
-    const processedRoute = processRouteForPrivacy(route, privacyMode, stops);
+    const { route: processedRoute, processedStops, removedCount } = processRouteForPrivacy(route, privacyMode, stops);
     
     const ip = req.headers['x-forwarded-for']?.toString().split(',')[0].trim() || req.ip || '';
     const ipHash = process.env.IP_HASH_SALT ? hashIp(ip, process.env.IP_HASH_SALT) : null;
@@ -248,7 +256,17 @@ app.post('/api/submit', async (req, res) => {
     const created = await prisma.submission.create({
       data: {
         route: processedRoute,
-        metadata: { ...metadata, privacyMode, stops },
+        metadata: {
+          ...metadata,
+          privacyMode,
+          stops: processedStops,
+          rawStops: consentRawStops ? stops : undefined,
+          schemaVersion: 1,
+          bufferStrategy: 'random-100-200m',
+          originalPointCount: route.length,
+          storedPointCount: processedRoute.length,
+          removedPointCount: removedCount
+        },
         ipHash,
         userAgent
       }
